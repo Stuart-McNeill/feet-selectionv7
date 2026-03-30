@@ -323,6 +323,12 @@ function init() {
     animate();
 }
 
+function sendToHost(data) {
+    const msg = JSON.stringify(data);
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(msg);
+    if (window.parent !== window) window.parent.postMessage(msg, "*");
+}
+
 function performRaycast() {
     raycaster.setFromCamera(mouse, camera);
     const hits = raycaster.intersectObjects(footGroup.children, true);
@@ -351,12 +357,10 @@ function performRaycast() {
         const cleanName = region.replace(/Left foot - |Right foot - /g, "");
         markerLogs.push({ region: cleanName });
         
-        if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-                count: markerGroup.children.length,
-                region: cleanName
-            }));
-        }
+        sendToHost({
+            count: markerGroup.children.length,
+            region: cleanName
+        });
     }
 }
 
@@ -407,9 +411,8 @@ function addRegion(name, pos, rot, scale) {
     regionGroup.add(mesh);
 }
 
-// --- EXPO BRIDGE COMMANDS ---
-window.handleMobileCommand = (json) => {
-    const data = JSON.parse(json);
+// --- BRIDGE COMMANDS ---
+function handleCommand(data) {
     if (data.action === 'SELECT') { currentFoot = data.side; loadFoot(); }
     if (data.action === 'SET_MODE') {
         mode = data.mode;
@@ -417,32 +420,41 @@ window.handleMobileCommand = (json) => {
     }
     if (data.action === 'UNDO') {
         if (markerGroup.children.length > 0) {
-            // Remove the last 3D object
             markerGroup.remove(markerGroup.children[markerGroup.children.length - 1]);
-            // Remove from logs
             markerLogs.pop();
-            
-            // Update the App UI immediately
             const lastRegion = markerLogs.length > 0 ? markerLogs[markerLogs.length - 1].region : "READY";
-            if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                    count: markerGroup.children.length,
-                    region: lastRegion
-                }));
-            }
+            sendToHost({
+                count: markerGroup.children.length,
+                region: lastRegion
+            });
         }
     }
     if (data.action === 'CLEAR') {
         markerGroup.clear();
         markerLogs = [];
-        if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-                count: 0,
-                region: "READY"
-            }));
-        }
+        sendToHost({
+            count: 0,
+            region: "READY"
+        });
+    }
+}
+
+window.handleMobileCommand = (json) => {
+    try {
+        handleCommand(JSON.parse(json));
+    } catch (e) {
+        console.error("Error parsing mobile command:", e);
     }
 };
+
+window.addEventListener('message', (event) => {
+    try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data.action) handleCommand(data);
+    } catch (e) {
+        // Not a command or invalid JSON
+    }
+});
 
 function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
