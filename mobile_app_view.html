@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Foot Analysis Mobile</title>
+    <style>
+        body { margin: 0; background: #0a0a0c; color: white; font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; }
+        .header { position: absolute; top: 0; left: 0; right: 0; padding: 20px; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); z-index: 10; }
+        .footer { position: absolute; bottom: 30px; left: 20px; right: 20px; display: flex; flex-direction: column; gap: 15px; z-index: 10; }
+        .tool-bar { display: flex; background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
+        .tool-bar button { flex: 1; background: transparent; border: none; color: white; padding: 12px; font-size: 12px; font-weight: bold; border-radius: 8px; }
+        .tool-bar button.active { background: #00f2ff; color: black; }
+        .region-badge { display: inline-block; background: rgba(0,242,255,0.2); color: #00f2ff; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-top: 5px; }
+        iframe { width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="font-size: 10px; opacity: 0.6; letter-spacing: 1px;">ACTIVE SESSION</div>
+        <div id="region-badge" class="region-badge">READY</div>
+    </div>
+    <iframe id="viewer" src="index.html"></iframe>
+    <div class="footer">
+        <div class="tool-bar">
+            <button id="m-rotate" class="active" onclick="run('SET_MODE', {mode:'rotate'})">ROTATE</button>
+            <button id="m-mark" onclick="run('SET_MODE', {mode:'mark'})">MARK</button>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="run('UNDO')" style="flex:1; background: rgba(0,0,0,0.5); border: 1px solid #333; color: white; padding: 15px; border-radius: 12px; font-weight: bold;">UNDO</button>
+            <button onclick="run('CLEAR')" style="flex:1; background: rgba(0,0,0,0.5); border: 1px solid #333; color: white; padding: 15px; border-radius: 12px; font-weight: bold;">CLEAR</button>
+        </div>
+    </div>
+    <script>
+        const viewer = document.getElementById('viewer');
+        function run(action, params = {}) {
+            viewer.contentWindow.postMessage(JSON.stringify({ action, ...params }), "*");
+            if (action === 'SET_MODE') {
+                document.getElementById('m-rotate').className = params.mode === 'rotate' ? 'active' : '';
+                document.getElementById('m-mark').className = params.mode === 'mark' ? 'active' : '';
+            }
+        }
+        window.addEventListener('message', (e) => {
+            try {
+                const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+                if (data.region) document.getElementById('region-badge').innerText = data.region.toUpperCase();
+            } catch(err) {}
+        });
+    </script>
+</body>
+</html>
