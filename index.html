@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>3D Foot Analysis V4</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #0a0a0c; touch-action: none; }
+        body { margin: 0; overflow: hidden; background: #0a0a0c; touch-action: none; display: flex; justify-content: center; align-items: center; }
         #ui-layer { display: none !important; }
+        #loading { color: #00f2ff; font-family: sans-serif; font-size: 14px; font-weight: bold; position: absolute; z-index: 100; }
     </style>
 </head>
 <body>
+<div id="loading">LOADING 3D MODEL...</div>
 
 <script type="importmap">
     {
@@ -366,11 +368,15 @@ function performRaycast() {
 
 function loadFoot() {
     isLoaded = false;
+    const loaderElement = document.getElementById('loading');
+    if (loaderElement) loaderElement.style.display = 'block';
+
     footGroup.clear();
     markerGroup.clear();
     markerLogs = [];
 
     new GLTFLoader().load(urls[currentFoot], (gltf) => {
+        if (loaderElement) loaderElement.style.display = 'none';
         const model = gltf.scene;
         model.traverse(c => { 
             if(c.isMesh) {
