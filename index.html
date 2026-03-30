@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>3D Foot Analysis V4</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #0a0a0c; touch-action: none; }
+        body { margin: 0; overflow: hidden; background: #0a0a0c; touch-action: none; display: flex; justify-content: center; align-items: center; }
         #ui-layer { display: none !important; }
+        #loading { color: #00f2ff; font-family: sans-serif; font-size: 14px; font-weight: bold; position: absolute; z-index: 100; }
     </style>
 </head>
 <body>
+<div id="loading">LOADING 3D MODEL...</div>
 
 <script type="importmap">
     {
@@ -323,6 +325,12 @@ function init() {
     animate();
 }
 
+function sendToHost(data) {
+    const msg = JSON.stringify(data);
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(msg);
+    if (window.parent !== window) window.parent.postMessage(msg, "*");
+}
+
 function performRaycast() {
     raycaster.setFromCamera(mouse, camera);
     const hits = raycaster.intersectObjects(footGroup.children, true);
@@ -351,22 +359,24 @@ function performRaycast() {
         const cleanName = region.replace(/Left foot - |Right foot - /g, "");
         markerLogs.push({ region: cleanName });
         
-        if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-                count: markerGroup.children.length,
-                region: cleanName
-            }));
-        }
+        sendToHost({
+            count: markerGroup.children.length,
+            region: cleanName
+        });
     }
 }
 
 function loadFoot() {
     isLoaded = false;
+    const loaderElement = document.getElementById('loading');
+    if (loaderElement) loaderElement.style.display = 'block';
+
     footGroup.clear();
     markerGroup.clear();
     markerLogs = [];
 
     new GLTFLoader().load(urls[currentFoot], (gltf) => {
+        if (loaderElement) loaderElement.style.display = 'none';
         const model = gltf.scene;
         model.traverse(c => { 
             if(c.isMesh) {
@@ -407,9 +417,8 @@ function addRegion(name, pos, rot, scale) {
     regionGroup.add(mesh);
 }
 
-// --- EXPO BRIDGE COMMANDS ---
-window.handleMobileCommand = (json) => {
-    const data = JSON.parse(json);
+// --- BRIDGE COMMANDS ---
+function handleCommand(data) {
     if (data.action === 'SELECT') { currentFoot = data.side; loadFoot(); }
     if (data.action === 'SET_MODE') {
         mode = data.mode;
@@ -417,32 +426,41 @@ window.handleMobileCommand = (json) => {
     }
     if (data.action === 'UNDO') {
         if (markerGroup.children.length > 0) {
-            // Remove the last 3D object
             markerGroup.remove(markerGroup.children[markerGroup.children.length - 1]);
-            // Remove from logs
             markerLogs.pop();
-            
-            // Update the App UI immediately
             const lastRegion = markerLogs.length > 0 ? markerLogs[markerLogs.length - 1].region : "READY";
-            if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                    count: markerGroup.children.length,
-                    region: lastRegion
-                }));
-            }
+            sendToHost({
+                count: markerGroup.children.length,
+                region: lastRegion
+            });
         }
     }
     if (data.action === 'CLEAR') {
         markerGroup.clear();
         markerLogs = [];
-        if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-                count: 0,
-                region: "READY"
-            }));
-        }
+        sendToHost({
+            count: 0,
+            region: "READY"
+        });
+    }
+}
+
+window.handleMobileCommand = (json) => {
+    try {
+        handleCommand(JSON.parse(json));
+    } catch (e) {
+        console.error("Error parsing mobile command:", e);
     }
 };
+
+window.addEventListener('message', (event) => {
+    try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data.action) handleCommand(data);
+    } catch (e) {
+        // Not a command or invalid JSON
+    }
+});
 
 function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
